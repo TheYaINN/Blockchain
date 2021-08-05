@@ -11,7 +11,7 @@ public abstract class Config {
     /**
      * Minimum number of leading zeros every block hash has to fulfill
      */
-    public static final int DIFFICULTY = 3;
+    public static final int DIFFICULTY = 1;
 
     /**
      * Maximum numver of Transactions a Block can hold

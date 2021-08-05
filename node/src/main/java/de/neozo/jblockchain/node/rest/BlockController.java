@@ -34,6 +34,7 @@ public class BlockController {
 
     /**
      * Retrieve all Blocks in order of mine date, also known as Blockchain
+     *
      * @return JSON list of Blocks
      */
     @RequestMapping
@@ -45,8 +46,8 @@ public class BlockController {
      * Add a new Block at the end of the Blockchain.
      * It is expected that the Block is valid, see BlockService.verify(Block) for details.
      *
-     * @param block the Block to add
-     * @param publish if true, this Node is going to inform all other Nodes about the new Block
+     * @param block    the Block to add
+     * @param publish  if true, this Node is going to inform all other Nodes about the new Block
      * @param response Status Code 202 if Block accepted, 406 if verification fails
      */
     @RequestMapping(method = RequestMethod.PUT)

@@ -157,4 +157,16 @@ public class Block {
     public int hashCode() {
         return Arrays.hashCode(hash);
     }
+
+    @Override
+    public String toString() {
+        return "Block{" +
+                "hash=" + Arrays.toString(hash) +
+                ", previousBlockHash=" + Arrays.toString(previousBlockHash) +
+                ", transactions=" + transactions +
+                ", merkleRoot=" + Arrays.toString(merkleRoot) +
+                ", tries=" + tries +
+                ", timestamp=" + timestamp +
+                '}';
+    }
 }

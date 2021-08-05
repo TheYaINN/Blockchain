@@ -3,13 +3,15 @@ package de.neozo.jblockchain.client;
 
 import de.neozo.jblockchain.common.SignatureUtils;
 import de.neozo.jblockchain.common.domain.Address;
+import de.neozo.jblockchain.common.domain.Block;
 import de.neozo.jblockchain.common.domain.Transaction;
-import org.apache.commons.cli.*;
 import org.apache.commons.codec.binary.Base64;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,7 +23,7 @@ import java.security.NoSuchProviderException;
 /**
  * Simple class to help building REST calls for jBlockchain.
  * Just run it in command line for instructions on how to use it.
- *
+ * <p>
  * Functions include:
  * - Generate Private/Public-Key
  * - Publish a new Address
@@ -29,110 +31,133 @@ import java.security.NoSuchProviderException;
  */
 public class BlockchainClient {
 
+    private final String serverPort;
+    private final String storePath;
+    private final String serverAddress;
+    private final Boolean sslEnabled;
+
+    private final String SSL_CONNECTION = "https";
+    private final String CONNECTION = "http";
+
+    private final String url;
+    private final Path pub;
+    private final Path priv;
+    private Address address;
+
+
     public static void main(String args[]) throws Exception {
-        CommandLineParser parser = new DefaultParser();
-        Options options = getOptions();
+        BlockchainClient client = new BlockchainClient("8080", "blockchain", "localhost", false);
+    }
+
+    BlockchainClient(String serverPort, String storePath, String serverAddress, Boolean sslEnabled) {
+        this.serverPort = serverPort;
+        this.storePath = storePath;
+        this.serverAddress = serverAddress;
+        this.sslEnabled = sslEnabled;
+        url = buildUrl();
+        pub = Paths.get("key.pub");
+        priv = Paths.get("key.priv");
+
         try {
-            CommandLine line = parser.parse(options, args);
-            executeCommand(line);
-        } catch (ParseException e) {
-            System.err.println(e.getMessage());
-            HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp("BlockchainClient", options , true);
-        }
-    }
-
-    private static void executeCommand(CommandLine line) throws Exception {
-        if (line.hasOption("keypair")) {
             generateKeyPair();
-        } else if (line.hasOption("address")) {
-            String node = line.getOptionValue("node");
-            String name = line.getOptionValue("name");
-            String publickey = line.getOptionValue("publickey");
-            if (node == null || name == null || publickey == null) {
-                throw new ParseException("node, name and publickey is required");
-            }
-            publishAddress(new URL(node), Paths.get(publickey), name);
-
-        } else if (line.hasOption("transaction")) {
-            String node = line.getOptionValue("node");
-            String message = line.getOptionValue("message");
-            String sender = line.getOptionValue("sender");
-            String privatekey = line.getOptionValue("privatekey");
-            if (node == null || message == null || sender == null || privatekey == null) {
-                throw new ParseException("node, message, sender and privatekey is required");
-            }
-            publishTransaction(new URL(node), Paths.get(privatekey), message, Base64.decodeBase64(sender));
+        } catch (NoSuchProviderException | NoSuchAlgorithmException | IOException e) {
+            e.printStackTrace();
         }
+
+        JFrame frame = new JFrame();
+        frame.setSize(400, 400);
+        frame.setLocationRelativeTo(null);
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+
+        JPanel top = new JPanel(new FlowLayout());
+        frame.add(top, BorderLayout.NORTH);
+
+        JButton startMiner = new JButton("Start");
+        startMiner.addActionListener(e -> start());
+        top.add(startMiner);
+
+        JButton stopMiner = new JButton("Stop");
+        stopMiner.addActionListener(e -> stop());
+        top.add(stopMiner);
+
+        JPanel center = new JPanel(new FlowLayout());
+        frame.add(center, BorderLayout.CENTER);
+
+        JButton pubAddress = new JButton("Publish Address");
+        pubAddress.addActionListener(e -> publishAddress(url, pub, "Bengt"));
+        center.add(pubAddress);
+
+        JButton transaction = new JButton("Publish Transaction");
+        transaction.addActionListener(e -> publishTransaction(url, priv, "Some text", address.getHash()));
+        center.add(transaction);
+
+        JButton blockchain = new JButton("get Blockchain");
+        blockchain.addActionListener(e -> getBlockchain());
+        center.add(blockchain);
+
+        frame.setVisible(true);
     }
 
-    private static Options getOptions() {
-        OptionGroup actions = new OptionGroup();
-        actions.addOption(new Option("k", "keypair", false, "generate private/public key pair"));
-        actions.addOption(new Option("a", "address", false, "publish new address"));
-        actions.addOption(new Option("t", "transaction", false, "publish new transaction"));
-        actions.setRequired(true);
-
-        Options options = new Options();
-        options.addOptionGroup(actions);
-        options.addOption(Option.builder("o")
-                .longOpt("node")
-                .hasArg()
-                .argName("Node URL")
-                .desc("needed for address and transaction publishing")
-                .build());
-        options.addOption(Option.builder("n")
-                .longOpt("name")
-                .hasArg()
-                .argName("name for new address")
-                .desc("needed for address publishing")
-                .build());
-        options.addOption(Option.builder("p")
-                .longOpt("publickey")
-                .hasArg()
-                .argName("path to key file")
-                .desc("needed for address publishing")
-                .build());
-        options.addOption(Option.builder("v")
-                .longOpt("privatekey")
-                .hasArg()
-                .argName("path to key file")
-                .desc("needed for transaction publishing")
-                .build());
-        options.addOption(Option.builder("m")
-                .longOpt("message")
-                .hasArg()
-                .argName("message to post")
-                .desc("needed for transaction publishing")
-                .build());
-        options.addOption(Option.builder("s")
-                .longOpt("sender")
-                .hasArg()
-                .argName("address hash (Base64)")
-                .desc("needed for transaction publishing")
-                .build());
-
-        return options;
+    public void getBlockchain() {
+        RestTemplate restTemplate = new RestTemplate();
+        System.out.println(restTemplate.getForEntity(buildUrl() + "/block", String.class));
     }
 
-    private static void generateKeyPair() throws NoSuchProviderException, NoSuchAlgorithmException, IOException {
+    public void start() {
+        callService("/block/start-miner");
+    }
+
+    public void stop() {
+        callService("/block/stop-miner");
+    }
+
+    private void generateKeyPair() throws NoSuchProviderException, NoSuchAlgorithmException, IOException {
         KeyPair keyPair = SignatureUtils.generateKeyPair();
         Files.write(Paths.get("key.priv"), keyPair.getPrivate().getEncoded());
         Files.write(Paths.get("key.pub"), keyPair.getPublic().getEncoded());
     }
 
-    private static void publishAddress(URL node, Path publicKey, String name) throws IOException {
+    public void publishAddress(String node, Path publicKey, String name) {
         RestTemplate restTemplate = new RestTemplate();
-        Address address = new Address(name, Files.readAllBytes(publicKey));
-        restTemplate.put(node.toString() + "/address?publish=true", address);
+        address = new Address(name, getKey(publicKey));
+        restTemplate.put(node + "/address?publish=true", address);
         System.out.println("Hash of new address: " + Base64.encodeBase64String(address.getHash()));
     }
 
-    private static void publishTransaction(URL node, Path privateKey, String text, byte[] senderHash) throws Exception {
+    public void publishTransaction(String node, Path privateKey, String text, byte[] senderHash) {
         RestTemplate restTemplate = new RestTemplate();
-        byte[] signature = SignatureUtils.sign(text.getBytes(), Files.readAllBytes(privateKey));
+        byte[] signature = new byte[0];
+        try {
+            signature = SignatureUtils.sign(text.getBytes(), getKey(privateKey));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         Transaction transaction = new Transaction(text, senderHash, signature);
-        restTemplate.put(node.toString() + "/transaction?publish=true", transaction);
+        restTemplate.put(node + "/transaction?publish=true", transaction);
         System.out.println("Hash of new transaction: " + Base64.encodeBase64String(transaction.getHash()));
+    }
+
+    private byte[] getKey(Path path) {
+        try {
+            return Files.readAllBytes(path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new byte[]{};
+    }
+
+
+    private void callService(String path) {
+        RestTemplate template = new RestTemplate();
+        template.getForEntity(String.format("%s%s", buildUrl(), path), String.class);
+    }
+
+    private String buildUrl() {
+        return getProtocol() + "://" + serverAddress + ":" + serverPort;
+    }
+
+
+    private String getProtocol() {
+        return sslEnabled ? SSL_CONNECTION : CONNECTION;
     }
 }
