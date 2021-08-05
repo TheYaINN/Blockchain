@@ -1,23 +1,34 @@
 package de.neozo.jblockchain.client;
 
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.neozo.jblockchain.common.SignatureUtils;
 import de.neozo.jblockchain.common.domain.Address;
 import de.neozo.jblockchain.common.domain.Block;
 import de.neozo.jblockchain.common.domain.Transaction;
 import org.apache.commons.codec.binary.Base64;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-import javax.swing.*;
-import java.awt.*;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.WindowConstants;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.util.List;
+import java.util.zip.GZIPInputStream;
 
 
 /**
@@ -92,15 +103,33 @@ public class BlockchainClient {
         center.add(transaction);
 
         JButton blockchain = new JButton("get Blockchain");
-        blockchain.addActionListener(e -> getBlockchain());
+        blockchain.addActionListener(e -> {
+            try {
+                getBlockchain();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        });
         center.add(blockchain);
 
         frame.setVisible(true);
     }
 
-    public void getBlockchain() {
-        RestTemplate restTemplate = new RestTemplate();
-        System.out.println(restTemplate.getForEntity(buildUrl() + "/block", String.class));
+    public void getBlockchain() throws IOException {
+        String protocol = sslEnabled ? "https" : "http";
+        HttpURLConnection con = (HttpURLConnection) new URL(String.format("%s/block", buildUrl())).openConnection();
+        con.setRequestProperty("Accept-Encoding", "gzip");
+        InputStream inp;
+        if ("gzip".equals(con.getContentEncoding())) {
+            inp = new GZIPInputStream(con.getInputStream());
+        } else {
+            inp = con.getInputStream();
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        TypeReference<List<Block>> typeReference = new TypeReference<List<Block>>() {
+        };
+        System.out.println(mapper.readValue(inp, typeReference));
     }
 
     public void start() {
